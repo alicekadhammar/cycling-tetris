@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zwift-Tetris</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#141923">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="manifest.json">
+
+    <style>
+        /* Colorful Animated Background */
+        body {
+            margin: 0;
+            padding: 20px 0;
+            min-height: 100vh;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #fff;
+            overflow-y: auto;
+            overflow-x: hidden;
+            background: linear-gradient(-45deg, #ff00cc, #333399, #00d2ff, #f953c6);
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
+        }
+
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* Bicycle Animation */
+        .bicycle-rider {
+            position: fixed;
+            z-index: 1;
+            animation: rideAround 20s linear infinite;
+            filter: drop-shadow(0 0 10px rgba(255, 0, 204, 0.6));
+            pointer-events: none; /* Så man inte råkar klicka på den */
+        }
+
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        .wheel { animation: spin 0.8s linear infinite; }
+        
+        @keyframes pedal { 
+            0% { transform: rotate(-15deg); } 
+            100% { transform: rotate(15deg); } 
+        }
+        .leg { 
+            animation: pedal 0.4s infinite alternate ease-in-out; 
+            transform-origin: 40px 38px; 
+        }
+        .leg-back { 
+            animation: pedal 0.4s infinite alternate-reverse ease-in-out; 
+            transform-origin: 40px 38px; 
+        }
+        
+        @keyframes bob {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-2px); }
+        }
+        .rider-body { 
+            animation: bob 0.4s ease-in-out infinite; 
+        }
+
+        @keyframes rideAround {
+            0%     { top: 10px; left: 10px; transform: scaleX(1) rotate(0deg); }
+            24.9%  { top: 10px; left: calc(100vw - 90px); transform: scaleX(1) rotate(0deg); }
+            25%    { top: 10px; left: calc(100vw - 90px); transform: scaleX(1) rotate(90deg); }
+            49.9%  { top: calc(100vh - 90px); left: calc(100vw - 90px); transform: scaleX(1) rotate(90deg); }
+            50%    { top: calc(100vh - 90px); left: calc(100vw - 90px); transform: scaleX(-1) rotate(0deg); }
+            74.9%  { top: calc(100vh - 90px); left: 10px; transform: scaleX(-1) rotate(0deg); }
+            75%    { top: calc(100vh - 90px); left: 10px; transform: scaleX(1) rotate(-90deg); }
+            99.9%  { top: 10px; left: 10px; transform: scaleX(1) rotate(-90deg); }
+            100%   { top: 10px; left: 10px; transform: scaleX(1) rotate(0deg); }
+        }
+
+        h1 {
+            color: #fff;
+            font-size: 3rem;
+            margin-top: auto;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5), 0 0 20px rgba(255, 0, 204, 0.8);
+            text-align: center;
+            position: relative;
+            z-index: 10;
+        }
+
+        /* Screen Management */
+        .screen {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: auto;
+            background: rgba(20, 25, 35, 0.85);
+            backdrop-filter: blur(10px);
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5), inset 0 0 15px rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.1);
+            max-width: 600px;
+            width: 90%;
+            position: relative;
+            z-index: 10;
+        }
+
+        .screen.active {
+            display: flex;
+        }
+
+        /* Buttons */
+        .btn {
+            background: linear-gradient(90deg, #00d2ff 0%, #3a7bd5 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            margin: 10px 0;
+            font-size: 1.2rem;
+            font-weight: bold;
+            border-radius: 50px;
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: transform 0.2s, box-shadow 0.2s;
+            width: 100%;
+            max-width: 300px;
+            text-align: center;
+        }
+
+        .btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 15px rgba(0, 210, 255, 0.6);
+        }
+        
+        .btn.secondary {
+            background: linear-gradient(90deg, #ff00cc 0%, #333399 100%);
+        }
+
+        /* Game Layout */
+        .game-layout {
+            display: flex;
+            flex-direction: row;
+            gap: 20px;
+            align-items: flex-start;
+            justify-content: center;
+        }
+
+        .side-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            width: 100px;
+        }
+
+        canvas {
+            background-color: #0d1117;
+            border: 3px solid #3a7bd5;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(58, 123, 213, 0.5);
+        }
+
+        .mini-canvas {
+            width: 80px;
+            height: auto;
+            border: 2px solid #3a7bd5;
+            box-shadow: 0 0 10px rgba(58, 123, 213, 0.3);
+            display: block;
+            margin: 0 auto;
+        }
+
+        /* Info Panel */
+        .info-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            width: 220px;
+        }
+
+        .panel-box {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 15px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .score-box h3 {
+            margin: 0;
+            font-size: 1rem;
+            color: #a0aec0;
+            text-transform: uppercase;
+        }
+
+        .score-box span {
+            display: block;
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #00d2ff;
+            text-shadow: 0 0 10px rgba(0, 210, 255, 0.5);
+        }
+
+        .controls-info {
+            font-size: 0.9rem;
+            line-height: 1.6;
+            color: #cbd5e0;
+        }
+
+        .controls-info em {
+            color: #ff00cc;
+            font-style: normal;
+            font-weight: bold;
+        }
+
+        .status-box {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.1);
+            width: 100%;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .status-indicator {
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 8px;
+            background-color: #e53e3e;
+            font-weight: bold;
+            font-size: 0.9rem;
+            transition: all 0.3s;
+        }
+
+        .status-indicator.connected {
+            background-color: #48bb78;
+            box-shadow: 0 0 15px rgba(72, 187, 120, 0.5);
+        }
+
+        .gamepad-status {
+            text-align: center;
+            font-weight: bold;
+            padding: 10px;
+            border-radius: 8px;
+            background-color: #e53e3e;
+            transition: all 0.3s;
+        }
+
+        .gamepad-status.connected {
+            background-color: #48bb78;
+            box-shadow: 0 0 15px rgba(72, 187, 120, 0.5);
+        }
+
+        /* Inputs & Lists */
+        input[type="text"] {
+            padding: 12px 20px;
+            font-size: 1.2rem;
+            border-radius: 25px;
+            border: 2px solid #00d2ff;
+            background: rgba(0,0,0,0.5);
+            color: white;
+            margin-bottom: 20px;
+            text-align: center;
+            width: 80%;
+            outline: none;
+        }
+
+        input[type="text"]:focus {
+            box-shadow: 0 0 15px rgba(0, 210, 255, 0.5);
+        }
+
+        ol.leaderboard-list {
+            list-style: none;
+            padding: 0;
+            width: 100%;
+            margin-bottom: 30px;
+        }
+
+        ol.leaderboard-list li {
+            display: flex;
+            justify-content: space-between;
+            padding: 15px 20px;
+            margin-bottom: 10px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+        
+        ol.leaderboard-list li span:first-child {
+            color: #f953c6;
+        }
+        
+        ol.leaderboard-list li span:last-child {
+            color: #00d2ff;
+        }
+
+        @media (max-width: 768px) {
+            .game-layout {
+                flex-direction: column;
+                align-items: center;
+            }
+            .side-panel, .info-panel {
+                width: 100%;
+                max-width: 240px;
+                flex-direction: row;
+                justify-content: center;
+                flex-wrap: wrap;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Animaterad Cyklande Tjej (SVG) -->
+    <svg class="bicycle-rider" viewBox="0 0 100 100" width="80" height="80">
+        <!-- Fram och bakhjul -->
+        <g class="wheel" style="transform-origin: 25px 75px;">
+            <circle cx="25" cy="75" r="16" fill="none" stroke="#a0aec0" stroke-width="3"/>
+            <circle cx="25" cy="75" r="12" fill="none" stroke="#00d2ff" stroke-width="2" stroke-dasharray="6 6"/>
+            <circle cx="25" cy="75" r="3" fill="#ff00cc"/>
+        </g>
+        <g class="wheel" style="transform-origin: 75px 75px;">
+            <circle cx="75" cy="75" r="16" fill="none" stroke="#a0aec0" stroke-width="3"/>
+            <circle cx="75" cy="75" r="12" fill="none" stroke="#00d2ff" stroke-width="2" stroke-dasharray="6 6"/>
+            <circle cx="75" cy="75" r="3" fill="#ff00cc"/>
+        </g>
+
+        <!-- Cykelram -->
+        <path d="M25 75 L45 45 L70 45 L75 75 M45 45 L50 75 L70 45" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        
+        <!-- Sadel och Styre -->
+        <path d="M42 45 L40 35 M32 35 L46 35" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+        <path d="M70 45 L67 32 L75 32" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+
+        <!-- Tjej -->
+        <g class="rider-body">
+            <!-- Bakre Ben -->
+            <path d="M40 38 L52 55 L50 75" fill="none" stroke="#b8328f" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" class="leg-back"/>
+            <!-- Ben (fram) -->
+            <path d="M40 38 L52 55 L50 75" fill="none" stroke="#ff00cc" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" class="leg"/>
+            <!-- Kropp -->
+            <path d="M40 38 L55 20" fill="none" stroke="#f953c6" stroke-width="8" stroke-linecap="round"/>
+            <!-- Arm -->
+            <path d="M55 20 L68 32" fill="none" stroke="#ff00cc" stroke-width="5" stroke-linecap="round"/>
+            <!-- Huvud -->
+            <circle cx="60" cy="12" r="7" fill="#ffe0bd"/>
+            <!-- Hjälm -->
+            <path d="M53 12 A 7 7 0 0 1 67 12 Z" fill="#00d2ff"/>
+            <!-- Hästsvans -->
+            <path d="M54 12 Q40 10 35 20" fill="none" stroke="#f6ad55" stroke-width="4" stroke-linecap="round"/>
+        </g>
+    </svg>
+
+    <h1>Zwift-Tetris</h1>
+    
+    <!-- START SCREEN -->
+    <div id="start-screen" class="screen active">
+        
+        <div class="status-box">
+            <h3 style="margin-top: 0; color: #00d2ff;">Connect Equipment</h3>
+            
+            <button class="btn secondary" style="font-size: 1rem; padding: 10px 20px;" onclick="connectPowerMeter()" id="btn-power">
+                Connect Power Meter (Bluetooth)
+            </button>
+            <div id="ble-status" class="status-indicator">No power meter connected</div>
+            
+            <div style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
+                <span style="font-size: 0.9rem; color: #a0aec0;">Gamepad (Zwift Play / Controller):<br>Press any button to connect.</span>
+                <div id="menu-gamepad-status" class="status-indicator">No gamepad found</div>
+            </div>
+        </div>
+
+        <button class="btn" onclick="startGame()">Play Now</button>
+        <button class="btn secondary" onclick="showLeaderboard()">Leaderboard</button>
+    </div>
+
+    <!-- GAME SCREEN -->
+    <div id="game-screen" class="screen" style="padding: 20px; background: rgba(20, 25, 35, 0.6);">
+        <div class="game-layout">
+            
+            <div class="side-panel">
+                <div class="panel-box score-box">
+                    <h3>Hold</h3>
+                    <canvas id="hold-canvas" width="80" height="80" class="mini-canvas"></canvas>
+                </div>
+            </div>
+
+            <canvas id="tetris" width="240" height="400"></canvas>
+            
+            <div class="info-panel">
+                <div class="panel-box score-box">
+                    <h3>Next</h3>
+                    <canvas id="next-canvas" width="80" height="240" class="mini-canvas"></canvas>
+                </div>
+
+                <div class="panel-box score-box" style="border-color: #f953c6; box-shadow: 0 0 10px rgba(249, 83, 198, 0.3);">
+                    <h3 style="color: #f953c6;">Power</h3>
+                    <span id="watt-display" style="color: #f953c6;">0 W</span>
+                </div>
+
+                <div class="panel-box score-box">
+                    <h3>Score</h3>
+                    <span id="score">0</span>
+                </div>
+                
+                <div class="panel-box controls-info">
+                    <strong>Controls:</strong><br><br>
+                    <em>Keyboard:</em><br>
+                    Arrows: Move/Rotate<br>
+                    Down: Drop Faster<br>
+                    Shift/C: Hold Piece<br><br>
+                    <em>Zwift Play/Gamepad:</em><br>
+                    Stick/D-pad: Move<br>
+                    Button A/X: Rotate<br>
+                    Triggers: Drop<br>
+                    Bumpers: Hold
+                </div>
+
+                <div id="gamepad-status" class="gamepad-status">
+                    No Gamepad
+                </div>
+                
+                <button class="btn secondary" style="font-size: 0.9rem; padding: 10px;" onclick="quitGame()">Quit</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- GAME OVER SCREEN -->
+    <div id="game-over-screen" class="screen">
+        <h2 style="font-size: 2.5rem; color: #ff00cc; margin-top: 0;">Game Over!</h2>
+        <p style="font-size: 1.2rem; margin-bottom: 30px;">Final Score: <strong id="final-score" style="color: #00d2ff; font-size: 2rem;">0</strong></p>
+        
+        <input type="text" id="player-name" placeholder="Enter your name" maxlength="15" autocomplete="off">
+        
+        <button class="btn" onclick="saveScore()">Save Score</button>
+        <button class="btn secondary" onclick="showStartScreen()">Main Menu</button>
+    </div>
+
+    <!-- LEADERBOARD SCREEN -->
+    <div id="leaderboard-screen" class="screen">
+        <h2 style="font-size: 2rem; color: #00d2ff; margin-top: 0;">Top Riders</h2>
+        
+        <ol id="leaderboard-list" class="leaderboard-list">
+            <!-- Filled via JS -->
+        </ol>
+
+        <button class="btn" onclick="showStartScreen()">Back to Menu</button>
+    </div>
+
+    <script>
+        // --- GAME STATE MANAGEMENT ---
+        let gameState = 'START'; // START, PLAYING, GAMEOVER, LEADERBOARD
+        let currentWatts = 0; // Håller koll på dina nuvarande watt
+
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(screenId).classList.add('active');
+        }
+
+        function showStartScreen() {
+            gameState = 'START';
+            showScreen('start-screen');
+        }
+
+        function startGame() {
+            gameState = 'PLAYING';
+            showScreen('game-screen');
+            board.forEach(row => row.fill(0));
+            player.score = 0;
+            nextPiecesQueue = [];
+            heldPieceType = null;
+            updateScore();
+            playerReset();
+            dropCounter = 0;
+            lastTime = performance.now();
+            particles = []; // Clear any remaining particles
+            update();
+        }
+
+        function gameOver() {
+            gameState = 'GAMEOVER';
+            document.getElementById('final-score').innerText = player.score;
+            document.getElementById('player-name').value = '';
+            showScreen('game-over-screen');
+        }
+
+        function quitGame() {
+            gameState = 'START';
+            showStartScreen();
+        }
+
+        // --- LEADERBOARD LOGIC ---
+        function saveScore() {
+            let name = document.getElementById('player-name').value.trim();
+            if (!name) name = "Anonymous";
+
+            // Load existing scores from localStorage
+            let scores = JSON.parse(localStorage.getItem('zwiftTrisScores')) || [];
+            
+            // Add new score
+            scores.push({ name: name, score: player.score });
+            
+            // Sort by highest score
+            scores.sort((a, b) => b.score - a.score);
+            
+            // Keep top 10
+            scores = scores.slice(0, 10);
+            
+            // Save back to localStorage
+            localStorage.setItem('zwiftTrisScores', JSON.stringify(scores));
+            
+            showLeaderboard();
+        }
+
+        function showLeaderboard() {
+            gameState = 'LEADERBOARD';
+            const list = document.getElementById('leaderboard-list');
+            let scores = JSON.parse(localStorage.getItem('zwiftTrisScores')) || [];
+            
+            if (scores.length === 0) {
+                list.innerHTML = `<li style="justify-content: center; color: #a0aec0;">No scores yet. Be the first!</li>`;
+            } else {
+                list.innerHTML = scores.map(s => `<li><span>${s.name}</span> <span>${s.score}</span></li>`).join('');
+            }
+            
+            showScreen('leaderboard-screen');
+        }
+
+        // --- BLUETOOTH POWER METER LOGIC ---
+        async function connectPowerMeter() {
+            try {
+                // Ber webbläsaren leta efter enheter med Cycling Power-profilen (0x1818)
+                const device = await navigator.bluetooth.requestDevice({
+                    filters: [{ services: ['cycling_power'] }]
+                });
+                
+                document.getElementById('btn-power').innerText = "Connecting...";
+
+                const server = await device.gatt.connect();
+                const service = await server.getPrimaryService('cycling_power');
+                
+                // Karaktäristiken 0x2A63 skickar realtidsdata om cykeleffekt
+                const characteristic = await service.getCharacteristic('cycling_power_measurement');
+                
+                await characteristic.startNotifications();
+                characteristic.addEventListener('characteristicvaluechanged', handlePowerData);
+                
+                document.getElementById('ble-status').innerText = "Power Meter: " + device.name;
+                document.getElementById('ble-status').classList.add('connected');
+                document.getElementById('btn-power').innerText = "Connected";
+                document.getElementById('btn-power').style.display = "none"; // Dölj knappen när ansluten
+
+            } catch (error) {
+                console.error("Bluetooth-fel:", error);
+                alert("Could not connect to Bluetooth. (Make sure you are using Chrome/Edge and the device isn't connected to Zwift at the same time).");
+                document.getElementById('btn-power').innerText = "Connect Power Meter (Bluetooth)";
+            }
+        }
+
+        function handlePowerData(event) {
+            const data = event.target.value;
+            // Watt-siffran (Instantaneous Power) ligger som en Sint16 med start på byte 2.
+            const watts = data.getInt16(2, true); 
+            
+            currentWatts = Math.max(0, watts); // Säkerställ att vi inte får minusvärden
+            document.getElementById('watt-display').innerText = currentWatts + " W";
+        }
+
+        // --- TETRIS LOGIC ---
+        const canvas = document.getElementById('tetris');
+        const context = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const gamepadStatus = document.getElementById('gamepad-status');
+
+        const holdCanvas = document.getElementById('hold-canvas');
+        const holdContext = holdCanvas.getContext('2d');
+        const nextCanvas = document.getElementById('next-canvas');
+        const nextContext = nextCanvas.getContext('2d');
+
+        context.scale(20, 20);
+        holdContext.scale(20, 20);
+        nextContext.scale(20, 20);
+
+        function createMatrix(w, h) {
+            const matrix = [];
+            while (h--) {
+                matrix.push(new Array(w).fill(0));
+            }
+            return matrix;
+        }
+
+        function createPiece(type) {
+            if (type === 'T') return [[0, 0, 0], [1, 1, 1], [0, 1, 0]];
+            else if (type === 'O') return [[2, 2], [2, 2]];
+            else if (type === 'L') return [[0, 3, 0], [0, 3, 0], [0, 3, 3]];
+            else if (type === 'J') return [[0, 4, 0], [0, 4, 0], [4, 4, 0]];
+            else if (type === 'I') return [[0, 5, 0, 0], [0, 5, 0, 0], [0, 5, 0, 0], [0, 5, 0, 0]];
+            else if (type === 'S') return [[0, 6, 6], [6, 6, 0], [0, 0, 0]];
+            else if (type === 'Z') return [[7, 7, 0], [0, 7, 7], [0, 0, 0]];
+        }
+
+        const colors = [
+            null,
+            '#FF0D72', '#0DC2FF', '#0DFF72', '#F538FF', '#FF8E0D', '#FFE138', '#3877FF'
+        ];
+
+        let board = createMatrix(12, 20);
+
+        const player = {
+            pos: {x: 0, y: 0},
+            matrix: null,
+            score: 0,
+        };
+
+        let nextPiecesQueue = [];
+        let heldPieceType = null;
+        let canHold = true;
+        let currentPieceType = null;
+        const piecesBag = 'TJLOSZI';
+
+        function getRandomPieceType() {
+            return piecesBag[Math.floor(Math.random() * piecesBag.length)];
+        }
+
+        // --- PARTICLE SYSTEM ---
+        let particles = [];
+
+        function spawnParticles(yStart, colorCode) {
+            const yOffset = yStart; // row index in grid
+            const color = colors[colorCode] || '#fff';
+            
+            // Spawn 40 particles across the row
+            for(let i = 0; i < 40; i++) {
+                particles.push({
+                    x: Math.random() * 12,        // Grid X (0 to 12)
+                    y: yOffset + Math.random(),   // Grid Y
+                    vx: (Math.random() - 0.5) * 0.8, // X velocity
+                    vy: (Math.random() - 0.5) * 0.8, // Y velocity
+                    life: 1.0,                    // Full life
+                    decay: 0.02 + Math.random() * 0.03, // Fade speed
+                    color: `hsl(${Math.random() * 360}, 100%, 60%)` // Rainbow explosion!
+                });
+            }
+        }
+
+        function drawParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life -= p.decay;
+
+                if (p.life <= 0) {
+                    particles.splice(i, 1);
+                } else {
+                    context.globalAlpha = p.life;
+                    context.fillStyle = p.color;
+                    // Draw tiny particle in scaled coordinate system
+                    context.fillRect(p.x, p.y, 0.2, 0.2); 
+                }
+            }
+            context.globalAlpha = 1.0; // Reset alpha
+        }
+
+        // --- CORE GAME LOOP ---
+
+        function drawMiniMatrix(matrix, ctx, offsetX, offsetY) {
+            matrix.forEach((row, y) => {
+                row.forEach((value, x) => {
+                    if (value !== 0) {
+                        ctx.fillStyle = colors[value];
+                        ctx.fillRect(x + offsetX, y + offsetY, 1, 1);
+                        ctx.lineWidth = 0.05;
+                        ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+                        ctx.strokeRect(x + offsetX, y + offsetY, 1, 1);
+                        ctx.fillStyle = 'rgba(255,255,255,0.2)';
+                        ctx.fillRect(x + offsetX, y + offsetY, 1, 0.2);
+                        ctx.fillRect(x + offsetX, y + offsetY, 0.2, 1);
+                    }
+                });
+            });
+        }
+
+        function drawNext() {
+            nextContext.fillStyle = '#0d1117';
+            nextContext.fillRect(0, 0, nextCanvas.width, nextCanvas.height);
+            nextPiecesQueue.forEach((type, index) => {
+                const matrix = createPiece(type);
+                const offsetX = (4 - matrix[0].length) / 2;
+                const offsetY = index * 3.5 + 1; // Spacing for the next blocks
+                drawMiniMatrix(matrix, nextContext, offsetX, offsetY);
+            });
+        }
+
+        function drawHold() {
+            holdContext.fillStyle = '#0d1117';
+            holdContext.fillRect(0, 0, holdCanvas.width, holdCanvas.height);
+            if (heldPieceType) {
+                const matrix = createPiece(heldPieceType);
+                const offsetX = (4 - matrix[0].length) / 2;
+                const offsetY = (4 - matrix.length) / 2;
+                drawMiniMatrix(matrix, holdContext, offsetX, offsetY);
+            }
+        }
+
+        function drawMatrix(matrix, offset) {
+            matrix.forEach((row, y) => {
+                row.forEach((value, x) => {
+                    if (value !== 0) {
+                        context.fillStyle = colors[value];
+                        context.fillRect(x + offset.x, y + offset.y, 1, 1);
+                        context.lineWidth = 0.05;
+                        context.strokeStyle = 'rgba(0,0,0,0.5)';
+                        context.strokeRect(x + offset.x, y + offset.y, 1, 1);
+                        
+                        // Small highlight for pseudo 3D effect
+                        context.fillStyle = 'rgba(255,255,255,0.2)';
+                        context.fillRect(x + offset.x, y + offset.y, 1, 0.2);
+                        context.fillRect(x + offset.x, y + offset.y, 0.2, 1);
+                    }
+                });
+            });
+        }
+
+        function draw() {
+            context.fillStyle = '#0d1117';
+            context.fillRect(0, 0, canvas.width, canvas.height);
+
+            drawMatrix(board, {x: 0, y: 0});
+            if (player.matrix) {
+                drawMatrix(player.matrix, player.pos);
+            }
+            drawParticles();
+        }
+
+        function holdPiece() {
+            if (!canHold) return;
+            if (heldPieceType === null) {
+                heldPieceType = currentPieceType;
+                currentPieceType = nextPiecesQueue.shift();
+                nextPiecesQueue.push(getRandomPieceType());
+            } else {
+                const temp = currentPieceType;
+                currentPieceType = heldPieceType;
+                heldPieceType = temp;
+            }
+            
+            player.matrix = createPiece(currentPieceType);
+            player.pos.y = 0;
+            player.pos.x = (board[0].length / 2 | 0) - (player.matrix[0].length / 2 | 0);
+            
+            canHold = false;
+            drawHold();
+            drawNext();
+        }
+
+        function merge(board, player) {
+            player.matrix.forEach((row, y) => {
+                row.forEach((value, x) => {
+                    if (value !== 0) {
+                        board[y + player.pos.y][x + player.pos.x] = value;
+                    }
+                });
+            });
+        }
+
+        function collide(board, player) {
+            const m = player.matrix;
+            const o = player.pos;
+            for (let y = 0; y < m.length; ++y) {
+                for (let x = 0; x < m[y].length; ++x) {
+                    if (m[y][x] !== 0 &&
+                       (board[y + o.y] && board[y + o.y][x + o.x]) !== 0) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function arenaSweep() {
+            let rowCount = 1;
+            outer: for (let y = board.length - 1; y >= 0; --y) {
+                for (let x = 0; x < board[y].length; ++x) {
+                    if (board[y][x] === 0) {
+                        continue outer;
+                    }
+                }
+
+                // If we get here, the row is full. Trigger particle explosion!
+                // We pick the color of the first block in the row as base, or random
+                spawnParticles(y, board[y][0]);
+
+                const row = board.splice(y, 1)[0].fill(0);
+                board.unshift(row);
+                ++y;
+
+                player.score += rowCount * 10;
+                rowCount *= 2;
+            }
+        }
+
+        function playerDrop() {
+            player.pos.y++;
+            if (collide(board, player)) {
+                player.pos.y--;
+                merge(board, player);
+                playerReset();
+                arenaSweep();
+                updateScore();
+            }
+            dropCounter = 0;
+        }
+
+        function playerMove(offset) {
+            player.pos.x += offset;
+            if (collide(board, player)) {
+                player.pos.x -= offset;
+            }
+        }
+
+        function playerReset() {
+            if (nextPiecesQueue.length === 0) {
+                nextPiecesQueue = [getRandomPieceType(), getRandomPieceType(), getRandomPieceType()];
+            }
+            
+            currentPieceType = nextPiecesQueue.shift();
+            nextPiecesQueue.push(getRandomPieceType());
+            
+            player.matrix = createPiece(currentPieceType);
+            player.pos.y = 0;
+            player.pos.x = (board[0].length / 2 | 0) -
+                           (player.matrix[0].length / 2 | 0);
+            
+            canHold = true;
+            drawNext();
+            drawHold();
+
+            if (collide(board, player)) {
+                // Instantly game over
+                gameOver();
+            }
+        }
+
+        function rotate(matrix, dir) {
+            for (let y = 0; y < matrix.length; ++y) {
+                for (let x = 0; x < y; ++x) {
+                    [matrix[x][y], matrix[y][x]] = [matrix[y][x], matrix[x][y]];
+                }
+            }
+            if (dir > 0) {
+                matrix.forEach(row => row.reverse());
+            } else {
+                matrix.reverse();
+            }
+        }
+
+        function playerRotate(dir) {
+            const pos = player.pos.x;
+            let offset = 1;
+            rotate(player.matrix, dir);
+            while (collide(board, player)) {
+                player.pos.x += offset;
+                offset = -(offset + (offset > 0 ? 1 : -1));
+                if (offset > player.matrix[0].length) {
+                    rotate(player.matrix, -dir);
+                    player.pos.x = pos;
+                    return;
+                }
+            }
+        }
+
+        function updateScore() {
+            scoreElement.innerText = player.score;
+        }
+
+        let dropCounter = 0;
+        let lastTime = 0;
+        let animationId;
+
+        function update(time = 0) {
+            if (gameState !== 'PLAYING') return; // Stop logic if not playing
+
+            const deltaTime = time - lastTime;
+            lastTime = time;
+
+            // --- DYNAMISK HASTIGHET BASERAT PÅ WATT ---
+            // Om du trampar 0 Watt = 400ms (Snabbt och svårt!)
+            // Varje extra watt lägger till 4ms. 
+            // Trampar du 150W -> 400 + (150*4) = 1000ms (Normal/Skön hastighet)
+            // Trampar du 300W -> 400 + (300*4) = 1600ms (Långsamt och mycket enkelt)
+            // Max hastighet/tak sätts till 2500ms så att det inte stannar helt.
+            let dynamicDropInterval = Math.min(2500, Math.max(150, 400 + (currentWatts * 4)));
+
+            dropCounter += deltaTime;
+            if (dropCounter > dynamicDropInterval) {
+                playerDrop();
+            }
+
+            handleGamepadInput();
+            draw();
+            animationId = requestAnimationFrame(update);
+        }
+
+        // --- INPUT HANDLING ---
+        const gamepadState = {
+            leftPressed: false,
+            rightPressed: false,
+            dropPressed: false,
+            rotatePressed: false,
+            holdPressed: false
+        };
+
+        const menuGamepadStatus = document.getElementById('menu-gamepad-status');
+
+        window.addEventListener("gamepadconnected", (e) => {
+            gamepadStatus.textContent = "Gamepad Connected!";
+            gamepadStatus.classList.add('connected');
+            
+            if (menuGamepadStatus) {
+                menuGamepadStatus.textContent = "Gamepad Connected!";
+                menuGamepadStatus.classList.add('connected');
+            }
+        });
+
+        window.addEventListener("gamepaddisconnected", (e) => {
+            gamepadStatus.textContent = "No Gamepad";
+            gamepadStatus.classList.remove('connected');
+            
+            if (menuGamepadStatus) {
+                menuGamepadStatus.textContent = "No gamepad found";
+                menuGamepadStatus.classList.remove('connected');
+            }
+        });
+
+        function handleGamepadInput() {
+            const gamepads = navigator.getGamepads();
+            if (!gamepads) return;
+            const gp = gamepads[0] || gamepads[1]; 
+            if (!gp) return;
+
+            const deadzone = 0.5;
+
+            const leftInput = gp.axes[0] < -deadzone || gp.buttons[14]?.pressed;
+            const rightInput = gp.axes[0] > deadzone || gp.buttons[15]?.pressed;
+
+            if (leftInput && !gamepadState.leftPressed) {
+                playerMove(-1);
+                gamepadState.leftPressed = true;
+            } else if (!leftInput) {
+                gamepadState.leftPressed = false;
+            }
+
+            if (rightInput && !gamepadState.rightPressed) {
+                playerMove(1);
+                gamepadState.rightPressed = true;
+            } else if (!rightInput) {
+                gamepadState.rightPressed = false;
+            }
+
+            const dropInput = gp.axes[1] > deadzone || gp.buttons[13]?.pressed || gp.buttons[6]?.pressed || gp.buttons[7]?.pressed;
+            if (dropInput && !gamepadState.dropPressed) {
+                playerDrop();
+                gamepadState.dropPressed = true;
+            } else if (!dropInput) {
+                gamepadState.dropPressed = false;
+            }
+
+            const rotateInput = gp.buttons[0]?.pressed || gp.buttons[1]?.pressed || gp.buttons[2]?.pressed || gp.buttons[3]?.pressed;
+            if (rotateInput && !gamepadState.rotatePressed) {
+                playerRotate(1);
+                gamepadState.rotatePressed = true;
+            } else if (!rotateInput) {
+                gamepadState.rotatePressed = false;
+            }
+
+            const holdInput = gp.buttons[4]?.pressed || gp.buttons[5]?.pressed; // Bumpers L1/R1
+            if (holdInput && !gamepadState.holdPressed) {
+                holdPiece();
+                gamepadState.holdPressed = true;
+            } else if (!holdInput) {
+                gamepadState.holdPressed = false;
+            }
+        }
+
+        document.addEventListener('keydown', event => {
+            if (gameState !== 'PLAYING') return;
+            
+            if (event.keyCode === 37) {
+                playerMove(-1);
+            } else if (event.keyCode === 39) {
+                playerMove(1);
+            } else if (event.keyCode === 40) {
+                playerDrop();
+            } else if (event.keyCode === 38) {
+                playerRotate(1);
+            } else if (event.keyCode === 16 || event.keyCode === 67) { // Shift or C
+                holdPiece();
+            }
+        });
+
+        // --- PWA SERVICE WORKER REGISTRATION ---
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(registration => console.log('ServiceWorker registered'))
+                    .catch(err => console.log('ServiceWorker registration failed: ', err));
+            });
+        }
+
+        // Initialize Start Screen on load
+        showStartScreen();
+
+    </script>
+</body>
+</html>
