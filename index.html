@@ -139,6 +139,13 @@
             transform: scale(1.05);
             box-shadow: 0 0 15px rgba(0, 210, 255, 0.6);
         }
+
+        .btn.menu-selected {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(0, 210, 255, 0.8), 0 0 10px white;
+            border: 2px solid white;
+            background: linear-gradient(90deg, #3a7bd5 0%, #00d2ff 100%);
+        }
         
         .btn.secondary {
             background: linear-gradient(90deg, #ff00cc 0%, #333399 100%);
@@ -420,23 +427,13 @@
                     Down: Drop Faster<br>
                     Shift/C: Hold Piece<br><br>
                     <em>Zwift Click/Play:</em><br>
-                    ←/→: Move Left/Right<br>
-                    ↑/A: Rotate<br>
-                    ↓/Shift↓: Drop<br>
-                    B/Shift↑: Hold<br><br>
-                    <em>Gamepad:</em><br>
-                    Stick/D-pad: Move<br>
-                    Button A/X: Rotate<br>
-                    Triggers: Drop<br>
-                    Bumpers: Hold
+                    Arrows: Move/Rotate/Drop<br>
+                    <strong>A: Hard Drop</strong><br>
+                    <strong>B: Hold Piece</strong>
                 </div>
 
                 <div id="ble-controls-game-status" class="gamepad-status" style="margin-bottom: 8px;">
                     No BLE Controls
-                </div>
-
-                <div id="gamepad-status" class="gamepad-status">
-                    No Gamepad
                 </div>
                 
                 <button class="btn secondary" style="font-size: 0.9rem; padding: 10px;" onclick="quitGame()">Quit</button>
@@ -470,10 +467,46 @@
         // --- GAME STATE MANAGEMENT ---
         let gameState = 'START'; // START, PLAYING, GAMEOVER, LEADERBOARD
         let currentWatts = 0; // Håller koll på dina nuvarande watt
+        let menuSelectedIndex = 0;
 
         function showScreen(screenId) {
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
             document.getElementById(screenId).classList.add('active');
+            
+            // Reset menu selection for the screen
+            menuSelectedIndex = 0;
+            updateMenuHighlight();
+        }
+
+        function updateMenuHighlight() {
+            const activeScreen = document.querySelector('.screen.active');
+            if (!activeScreen) return;
+            
+            const buttons = Array.from(activeScreen.querySelectorAll('button:not([style*="display: none"]), input[type="text"]'));
+            buttons.forEach((btn, index) => {
+                if (index === menuSelectedIndex) {
+                    btn.classList.add('menu-selected');
+                    // Focus if it's an input
+                    if (btn.tagName === 'INPUT') btn.focus();
+                } else {
+                    btn.classList.remove('menu-selected');
+                }
+            });
+        }
+
+        function activateMenuOption() {
+            const activeScreen = document.querySelector('.screen.active');
+            if (!activeScreen) return;
+            
+            const buttons = Array.from(activeScreen.querySelectorAll('button:not([style*="display: none"]), input[type="text"]'));
+            if (buttons[menuSelectedIndex]) {
+                const element = buttons[menuSelectedIndex];
+                if (element.tagName === 'BUTTON') {
+                    element.click();
+                } else if (element.tagName === 'INPUT') {
+                    // Do nothing or maybe handle enter?
+                }
+            }
         }
 
         function showStartScreen() {
@@ -612,7 +645,15 @@
             rightPressed: false,
             dropPressed: false,
             rotatePressed: false,
-            holdPressed: false
+            aPressed: false,
+            bPressed: false,
+            // Cooldown timestamps for debouncing
+            lastLeft: 0,
+            lastRight: 0,
+            lastDrop: 0,
+            lastRotate: 0,
+            lastA: 0,
+            lastB: 0
         };
 
         function parseControllerButtonState(buttonMap) {
@@ -655,65 +696,79 @@
                 const pressed = parseControllerButtonState(buttonMap);
                 bleDebugLog(`0x23 btns: ${pressed.join(',') || 'none'}`);
                 applyBleButtons(pressed);
-                return;
             }
-
-            // Try interpreting the ENTIRE payload as a raw button bitmask
-            // (Zwift Click v2 may send shorter/simpler messages)
-            if (data.length >= 2) {
-                // Build a button map from all available bytes (little-endian)
-                let rawMap = 0;
-                for (let i = 0; i < Math.min(data.length, 4); i++) {
-                    rawMap |= (data[i] << (i * 8));
-                }
-                const rawPressed = parseControllerButtonState(rawMap);
-                
-                // Also try offset-1 (skip first byte as msg type)
-                let rawMap1 = 0;
-                for (let i = 1; i < Math.min(data.length, 5); i++) {
-                    rawMap1 |= (data[i] << ((i - 1) * 8));
-                }
-                const rawPressed1 = parseControllerButtonState(rawMap1);
-
-                // Log both interpretations for debugging
-                const debugStr = `type=0x${msgType.toString(16)} len=${data.length} | raw0:${rawPressed.length} raw1:${rawPressed1.length}`;
-                if (debugStr !== lastBleDebugData) {
-                    bleDebugLog(debugStr);
-                    lastBleDebugData = debugStr;
-                }
-
-                // Try the offset-1 interpretation (most likely for non-0x23 messages)
-                if (rawPressed1.length < Object.keys(BUTTON_MASKS).length) {
-                    // Some buttons are NOT in the "all pressed" state, meaning something is active
-                    applyBleButtons(rawPressed1);
-                }
-            }
+            // We ignore all other message types (e.g., battery, keepalive) to prevent false positives.
         }
 
         function applyBleButtons(pressed) {
             const leftActive = pressed.includes('LEFT_BTN');
             const rightActive = pressed.includes('RIGHT_BTN');
             const dropActive = pressed.includes('DOWN_BTN') || pressed.includes('SHFT_DN_L_BTN') || pressed.includes('SHFT_DN_R_BTN');
-            const rotateActive = pressed.includes('UP_BTN') || pressed.includes('A_BTN') || pressed.includes('SHFT_UP_L_BTN') || pressed.includes('SHFT_UP_R_BTN');
-            const holdActive = pressed.includes('B_BTN') || pressed.includes('POWERUP_L_BTN') || pressed.includes('POWERUP_R_BTN');
+            const rotateActive = pressed.includes('UP_BTN') || pressed.includes('SHFT_UP_L_BTN') || pressed.includes('SHFT_UP_R_BTN');
+            const aActive = pressed.includes('A_BTN');
+            const bActive = pressed.includes('B_BTN') || pressed.includes('POWERUP_L_BTN') || pressed.includes('POWERUP_R_BTN');
 
-            if (gameState !== 'PLAYING') return;
+            const now = Date.now();
+            const debounceMs = 200; // 200 ms cooldown to prevent false double-triggers
 
-            // Edge-triggered: only fire action on press, not while held
-            if (leftActive && !bleControlState.leftPressed) { playerMove(-1); bleDebugLog('→ MOVE LEFT'); }
+            // --- MENU NAVIGATION ---
+            if (gameState !== 'PLAYING') {
+                const activeScreen = document.querySelector('.screen.active');
+                if (!activeScreen) return;
+                const buttons = Array.from(activeScreen.querySelectorAll('button:not([style*="display: none"]), input[type="text"]'));
+
+                if (rotateActive && !bleControlState.rotatePressed && now - bleControlState.lastRotate > debounceMs) { // UP
+                    menuSelectedIndex = (menuSelectedIndex - 1 + buttons.length) % buttons.length;
+                    updateMenuHighlight();
+                    bleControlState.lastRotate = now;
+                }
+                if (dropActive && !bleControlState.dropPressed && now - bleControlState.lastDrop > debounceMs) { // DOWN
+                    menuSelectedIndex = (menuSelectedIndex + 1) % buttons.length;
+                    updateMenuHighlight();
+                    bleControlState.lastDrop = now;
+                }
+                if (aActive && !bleControlState.aPressed && now - bleControlState.lastA > debounceMs) { // SELECT
+                    activateMenuOption();
+                    bleControlState.lastA = now;
+                }
+
+                bleControlState.rotatePressed = rotateActive;
+                bleControlState.dropPressed = dropActive;
+                bleControlState.aPressed = aActive;
+                return;
+            }
+
+            // --- GAMEPLAY CONTROLS ---
+            // Edge-triggered: only fire action on press, not while held, and enforce debounce cooldown
+            if (leftActive && !bleControlState.leftPressed && now - bleControlState.lastLeft > debounceMs) { 
+                playerMove(-1); bleDebugLog('→ MOVE LEFT'); bleControlState.lastLeft = now;
+            }
             bleControlState.leftPressed = leftActive;
 
-            if (rightActive && !bleControlState.rightPressed) { playerMove(1); bleDebugLog('→ MOVE RIGHT'); }
+            if (rightActive && !bleControlState.rightPressed && now - bleControlState.lastRight > debounceMs) { 
+                playerMove(1); bleDebugLog('→ MOVE RIGHT'); bleControlState.lastRight = now;
+            }
             bleControlState.rightPressed = rightActive;
 
-            if (dropActive && !bleControlState.dropPressed) { playerDrop(); bleDebugLog('→ DROP'); }
+            if (dropActive && !bleControlState.dropPressed && now - bleControlState.lastDrop > debounceMs) { 
+                playerDrop(); bleDebugLog('→ DROP'); bleControlState.lastDrop = now;
+            }
             bleControlState.dropPressed = dropActive;
 
-            if (rotateActive && !bleControlState.rotatePressed) { playerRotate(1); bleDebugLog('→ ROTATE'); }
+            if (rotateActive && !bleControlState.rotatePressed && now - bleControlState.lastRotate > debounceMs) { 
+                playerRotate(1); bleDebugLog('→ ROTATE'); bleControlState.lastRotate = now;
+            }
             bleControlState.rotatePressed = rotateActive;
 
-            if (holdActive && !bleControlState.holdPressed) { holdPiece(); bleDebugLog('→ HOLD'); }
-            bleControlState.holdPressed = holdActive;
+            if (aActive && !bleControlState.aPressed && now - bleControlState.lastA > debounceMs) { 
+                playerHardDrop(); bleDebugLog('→ HARD DROP'); bleControlState.lastA = now;
+            }
+            bleControlState.aPressed = aActive;
+
+            if (bActive && !bleControlState.bPressed && now - bleControlState.lastB > debounceMs) { 
+                holdPiece(); bleDebugLog('→ HOLD'); bleControlState.lastB = now;
+            }
+            bleControlState.bPressed = bActive;
         }
 
         async function connectControls() {
@@ -1063,6 +1118,19 @@
             dropCounter = 0;
         }
 
+        function playerHardDrop() {
+            if (collide(board, player)) return; 
+            while (!collide(board, player)) {
+                player.pos.y++;
+            }
+            player.pos.y--;
+            merge(board, player);
+            playerReset();
+            arenaSweep();
+            updateScore();
+            dropCounter = 0;
+        }
+
         function playerMove(offset) {
             player.pos.x += offset;
             if (collide(board, player)) {
@@ -1224,7 +1292,22 @@
         }
 
         document.addEventListener('keydown', event => {
-            if (gameState !== 'PLAYING') return;
+            if (gameState !== 'PLAYING') {
+                const activeScreen = document.querySelector('.screen.active');
+                if (!activeScreen) return;
+                const buttons = Array.from(activeScreen.querySelectorAll('button:not([style*="display: none"]), input[type="text"]'));
+                
+                if (event.keyCode === 38) { // Up arrow
+                    menuSelectedIndex = (menuSelectedIndex - 1 + buttons.length) % buttons.length;
+                    updateMenuHighlight();
+                } else if (event.keyCode === 40) { // Down arrow
+                    menuSelectedIndex = (menuSelectedIndex + 1) % buttons.length;
+                    updateMenuHighlight();
+                } else if (event.keyCode === 13 || event.keyCode === 65) { // Enter or 'a'
+                    activateMenuOption();
+                }
+                return;
+            }
             
             if (event.keyCode === 37) {
                 playerMove(-1);
@@ -1236,6 +1319,8 @@
                 playerRotate(1);
             } else if (event.keyCode === 16 || event.keyCode === 67) { // Shift or C
                 holdPiece();
+            } else if (event.keyCode === 32 || event.keyCode === 65) { // Space or 'A' for hard drop
+                playerHardDrop();
             }
         });
 
