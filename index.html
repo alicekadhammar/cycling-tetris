@@ -378,10 +378,6 @@
                 <div id="ble-controls-status" class="status-indicator">No controls connected</div>
             </div>
 
-            <div style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
-                <span style="font-size: 0.9rem; color: #a0aec0;">Gamepad (Zwift Play / Controller):<br>Press any button to connect.</span>
-                <div id="menu-gamepad-status" class="status-indicator">No gamepad found</div>
-            </div>
         </div>
 
         <button class="btn" onclick="startGame()">Play Now</button>
@@ -1166,26 +1162,15 @@
             holdPressed: false
         };
 
-        const menuGamepadStatus = document.getElementById('menu-gamepad-status');
 
         window.addEventListener("gamepadconnected", (e) => {
             gamepadStatus.textContent = "Gamepad Connected!";
             gamepadStatus.classList.add('connected');
-            
-            if (menuGamepadStatus) {
-                menuGamepadStatus.textContent = "Gamepad Connected!";
-                menuGamepadStatus.classList.add('connected');
-            }
         });
 
         window.addEventListener("gamepaddisconnected", (e) => {
             gamepadStatus.textContent = "No Gamepad";
             gamepadStatus.classList.remove('connected');
-            
-            if (menuGamepadStatus) {
-                menuGamepadStatus.textContent = "No gamepad found";
-                menuGamepadStatus.classList.remove('connected');
-            }
         });
 
         function handleGamepadInput() {
