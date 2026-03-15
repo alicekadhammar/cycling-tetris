@@ -372,6 +372,13 @@
             <div id="ble-status" class="status-indicator">No power meter connected</div>
             
             <div style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
+                <button class="btn secondary" style="font-size: 1rem; padding: 10px 20px;" onclick="connectControls()" id="btn-controls">
+                    Connect Controls (Bluetooth)
+                </button>
+                <div id="ble-controls-status" class="status-indicator">No controls connected</div>
+            </div>
+
+            <div style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
                 <span style="font-size: 0.9rem; color: #a0aec0;">Gamepad (Zwift Play / Controller):<br>Press any button to connect.</span>
                 <div id="menu-gamepad-status" class="status-indicator">No gamepad found</div>
             </div>
@@ -416,11 +423,20 @@
                     Arrows: Move/Rotate<br>
                     Down: Drop Faster<br>
                     Shift/C: Hold Piece<br><br>
-                    <em>Zwift Play/Gamepad:</em><br>
+                    <em>Zwift Click/Play:</em><br>
+                    ←/→: Move Left/Right<br>
+                    ↑/A: Rotate<br>
+                    ↓/Shift↓: Drop<br>
+                    B/Shift↑: Hold<br><br>
+                    <em>Gamepad:</em><br>
                     Stick/D-pad: Move<br>
                     Button A/X: Rotate<br>
                     Triggers: Drop<br>
                     Bumpers: Hold
+                </div>
+
+                <div id="ble-controls-game-status" class="gamepad-status" style="margin-bottom: 8px;">
+                    No BLE Controls
                 </div>
 
                 <div id="gamepad-status" class="gamepad-status">
@@ -536,7 +552,6 @@
         // --- BLUETOOTH POWER METER LOGIC ---
         async function connectPowerMeter() {
             try {
-                // Ber webbläsaren leta efter enheter med Cycling Power-profilen (0x1818)
                 const device = await navigator.bluetooth.requestDevice({
                     filters: [{ services: ['cycling_power'] }]
                 });
@@ -545,8 +560,6 @@
 
                 const server = await device.gatt.connect();
                 const service = await server.getPrimaryService('cycling_power');
-                
-                // Karaktäristiken 0x2A63 skickar realtidsdata om cykeleffekt
                 const characteristic = await service.getCharacteristic('cycling_power_measurement');
                 
                 await characteristic.startNotifications();
@@ -555,10 +568,10 @@
                 document.getElementById('ble-status').innerText = "Power Meter: " + device.name;
                 document.getElementById('ble-status').classList.add('connected');
                 document.getElementById('btn-power').innerText = "Connected";
-                document.getElementById('btn-power').style.display = "none"; // Dölj knappen när ansluten
+                document.getElementById('btn-power').style.display = "none";
 
             } catch (error) {
-                console.error("Bluetooth-fel:", error);
+                console.error("Bluetooth error:", error);
                 alert("Could not connect to Bluetooth. (Make sure you are using Chrome/Edge and the device isn't connected to Zwift at the same time).");
                 document.getElementById('btn-power').innerText = "Connect Power Meter (Bluetooth)";
             }
@@ -566,11 +579,246 @@
 
         function handlePowerData(event) {
             const data = event.target.value;
-            // Watt-siffran (Instantaneous Power) ligger som en Sint16 med start på byte 2.
             const watts = data.getInt16(2, true); 
-            
-            currentWatts = Math.max(0, watts); // Säkerställ att vi inte får minusvärden
+            currentWatts = Math.max(0, watts);
             document.getElementById('watt-display').innerText = currentWatts + " W";
+        }
+
+        // --- BLUETOOTH ZWIFT CLICK / PLAY CONTROLS ---
+        const ZWIFT_SERVICE_PLAY = '00000001-19ca-4651-86e5-fa29dcdd09d1';
+        const ZWIFT_SERVICE_RIDE = '0000fc82-0000-1000-8000-00805f9b34fb';
+        const ZWIFT_CHAR_MEASUREMENT = '00000002-19ca-4651-86e5-fa29dcdd09d1';
+        const ZWIFT_CHAR_CONTROL    = '00000003-19ca-4651-86e5-fa29dcdd09d1';
+        const ZWIFT_CHAR_RESPONSE   = '00000004-19ca-4651-86e5-fa29dcdd09d1';
+
+        const BUTTON_MASKS = {
+            LEFT_BTN:      0x1,
+            UP_BTN:        0x2,
+            RIGHT_BTN:     0x4,
+            DOWN_BTN:      0x8,
+            A_BTN:         0x10,
+            B_BTN:         0x20,
+            Y_BTN:         0x40,
+            Z_BTN:         0x100,
+            SHFT_UP_L_BTN: 0x200,
+            SHFT_DN_L_BTN: 0x400,
+            POWERUP_L_BTN: 0x800,
+            ONOFF_L_BTN:   0x1000,
+            SHFT_UP_R_BTN: 0x2000,
+            SHFT_DN_R_BTN: 0x4000,
+            POWERUP_R_BTN: 0x10000,
+            ONOFF_R_BTN:   0x20000,
+        };
+
+        // Track BLE button states similarly to gamepad to avoid repeats
+        const bleControlState = {
+            leftPressed: false,
+            rightPressed: false,
+            dropPressed: false,
+            rotatePressed: false,
+            holdPressed: false
+        };
+
+        function parseControllerButtonState(buttonMap) {
+            // Buttons are PRESSED when the corresponding bit is 0 (cleared)
+            const pressed = [];
+            for (const [name, mask] of Object.entries(BUTTON_MASKS)) {
+                if ((buttonMap & mask) === 0) {
+                    pressed.push(name);
+                }
+            }
+            return pressed;
+        }
+
+        // Debug counter for BLE messages
+        let bleMessageCount = 0;
+        let lastBleDebugData = '';
+
+        function bleDebugLog(msg) {
+            console.log('[BLE Click]', msg);
+            // Also update on-screen debug display
+            const el = document.getElementById('ble-controls-game-status');
+            if (el) el.innerText = msg;
+        }
+
+        function handleControllerMessage(event) {
+            const data = new Uint8Array(event.target.value.buffer);
+            bleMessageCount++;
+            
+            // Log raw hex of every message (first 50 only to avoid spam)
+            const hex = Array.from(data).map(b => b.toString(16).padStart(2, '0')).join(' ');
+            if (bleMessageCount <= 50) {
+                console.log(`[BLE Click] msg #${bleMessageCount} (${data.length} bytes): ${hex}`);
+            }
+
+            const msgType = data[0];
+
+            // Try protocol-buffer style button status (0x23 = Zwift Ride format)
+            if (msgType === 0x23 && data.length >= 6) {
+                const buttonMap = data[2] | (data[3] << 8) | (data[4] << 16) | (data[5] << 24);
+                const pressed = parseControllerButtonState(buttonMap);
+                bleDebugLog(`0x23 btns: ${pressed.join(',') || 'none'}`);
+                applyBleButtons(pressed);
+                return;
+            }
+
+            // Try interpreting the ENTIRE payload as a raw button bitmask
+            // (Zwift Click v2 may send shorter/simpler messages)
+            if (data.length >= 2) {
+                // Build a button map from all available bytes (little-endian)
+                let rawMap = 0;
+                for (let i = 0; i < Math.min(data.length, 4); i++) {
+                    rawMap |= (data[i] << (i * 8));
+                }
+                const rawPressed = parseControllerButtonState(rawMap);
+                
+                // Also try offset-1 (skip first byte as msg type)
+                let rawMap1 = 0;
+                for (let i = 1; i < Math.min(data.length, 5); i++) {
+                    rawMap1 |= (data[i] << ((i - 1) * 8));
+                }
+                const rawPressed1 = parseControllerButtonState(rawMap1);
+
+                // Log both interpretations for debugging
+                const debugStr = `type=0x${msgType.toString(16)} len=${data.length} | raw0:${rawPressed.length} raw1:${rawPressed1.length}`;
+                if (debugStr !== lastBleDebugData) {
+                    bleDebugLog(debugStr);
+                    lastBleDebugData = debugStr;
+                }
+
+                // Try the offset-1 interpretation (most likely for non-0x23 messages)
+                if (rawPressed1.length < Object.keys(BUTTON_MASKS).length) {
+                    // Some buttons are NOT in the "all pressed" state, meaning something is active
+                    applyBleButtons(rawPressed1);
+                }
+            }
+        }
+
+        function applyBleButtons(pressed) {
+            const leftActive = pressed.includes('LEFT_BTN');
+            const rightActive = pressed.includes('RIGHT_BTN');
+            const dropActive = pressed.includes('DOWN_BTN') || pressed.includes('SHFT_DN_L_BTN') || pressed.includes('SHFT_DN_R_BTN');
+            const rotateActive = pressed.includes('UP_BTN') || pressed.includes('A_BTN') || pressed.includes('SHFT_UP_L_BTN') || pressed.includes('SHFT_UP_R_BTN');
+            const holdActive = pressed.includes('B_BTN') || pressed.includes('POWERUP_L_BTN') || pressed.includes('POWERUP_R_BTN');
+
+            if (gameState !== 'PLAYING') return;
+
+            // Edge-triggered: only fire action on press, not while held
+            if (leftActive && !bleControlState.leftPressed) { playerMove(-1); bleDebugLog('→ MOVE LEFT'); }
+            bleControlState.leftPressed = leftActive;
+
+            if (rightActive && !bleControlState.rightPressed) { playerMove(1); bleDebugLog('→ MOVE RIGHT'); }
+            bleControlState.rightPressed = rightActive;
+
+            if (dropActive && !bleControlState.dropPressed) { playerDrop(); bleDebugLog('→ DROP'); }
+            bleControlState.dropPressed = dropActive;
+
+            if (rotateActive && !bleControlState.rotatePressed) { playerRotate(1); bleDebugLog('→ ROTATE'); }
+            bleControlState.rotatePressed = rotateActive;
+
+            if (holdActive && !bleControlState.holdPressed) { holdPiece(); bleDebugLog('→ HOLD'); }
+            bleControlState.holdPressed = holdActive;
+        }
+
+        async function connectControls() {
+            if (!navigator.bluetooth) {
+                alert('Web Bluetooth is not supported in this browser. Use Chrome or Edge.');
+                return;
+            }
+
+            try {
+                document.getElementById('btn-controls').innerText = 'Scanning...';
+
+                // Use acceptAllDevices so the user can pick from any nearby BLE device.
+                // Both known Zwift service UUIDs are listed as optionalServices.
+                const device = await navigator.bluetooth.requestDevice({
+                    acceptAllDevices: true,
+                    optionalServices: [
+                        ZWIFT_SERVICE_PLAY,
+                        ZWIFT_SERVICE_RIDE,
+                        '0000180f-0000-1000-8000-00805f9b34fb', // Battery
+                        '0000180a-0000-1000-8000-00805f9b34fb', // Device Info
+                    ]
+                });
+
+                document.getElementById('btn-controls').innerText = 'Connecting...';
+                console.log('Zwift Click — connecting to:', device.name);
+
+                const server = await device.gatt.connect();
+
+                // Try to find the Zwift custom service (try Play/Click first, then Ride)
+                let service;
+                try {
+                    service = await server.getPrimaryService(ZWIFT_SERVICE_PLAY);
+                    console.log('Found Zwift Play/Click service');
+                } catch (e1) {
+                    try {
+                        service = await server.getPrimaryService(ZWIFT_SERVICE_RIDE);
+                        console.log('Found Zwift Ride service');
+                    } catch (e2) {
+                        throw new Error('Could not find a Zwift custom service on this device. Make sure you selected the Zwift Click controller.');
+                    }
+                }
+
+                // Get characteristics
+                const measurementChar = await service.getCharacteristic(ZWIFT_CHAR_MEASUREMENT);
+                const controlChar = await service.getCharacteristic(ZWIFT_CHAR_CONTROL);
+                let responseChar;
+                try {
+                    responseChar = await service.getCharacteristic(ZWIFT_CHAR_RESPONSE);
+                } catch (e) {
+                    console.log('Response characteristic not found, continuing without it.');
+                }
+
+                // Send the "RideOn" handshake
+                const handshake = new TextEncoder().encode('RideOn');
+                await controlChar.writeValue(handshake);
+                console.log('Sent RideOn handshake');
+
+                // Subscribe to measurement notifications (button states)
+                await measurementChar.startNotifications();
+                measurementChar.addEventListener('characteristicvaluechanged', handleControllerMessage);
+
+                // Optionally subscribe to response characteristic
+                if (responseChar) {
+                    try {
+                        await responseChar.startNotifications();
+                        responseChar.addEventListener('characteristicvaluechanged', (event) => {
+                            console.log('Zwift Click response:', new TextDecoder().decode(event.target.value));
+                        });
+                    } catch (e) {
+                        console.log('Could not subscribe to response char:', e);
+                    }
+                }
+
+                // Handle disconnection
+                device.addEventListener('gattserverdisconnected', () => {
+                    console.log('Zwift Click disconnected');
+                    const statusEl = document.getElementById('ble-controls-status');
+                    statusEl.innerText = 'Controls disconnected';
+                    statusEl.classList.remove('connected');
+                    const gameStatusEl = document.getElementById('ble-controls-game-status');
+                    gameStatusEl.innerText = 'No BLE Controls';
+                    gameStatusEl.classList.remove('connected');
+                    document.getElementById('btn-controls').innerText = 'Connect Controls (Bluetooth)';
+                    document.getElementById('btn-controls').style.display = '';
+                });
+
+                // Update UI
+                const statusEl = document.getElementById('ble-controls-status');
+                statusEl.innerText = 'Controls: ' + (device.name || 'Connected');
+                statusEl.classList.add('connected');
+                const gameStatusEl = document.getElementById('ble-controls-game-status');
+                gameStatusEl.innerText = 'BLE Controls ✓';
+                gameStatusEl.classList.add('connected');
+                document.getElementById('btn-controls').innerText = 'Connected';
+                document.getElementById('btn-controls').style.display = 'none';
+
+            } catch (error) {
+                console.error('Zwift Click connection error:', error);
+                alert('Could not connect controls: ' + error.message + '\n\nMake sure:\n• You are using Chrome or Edge\n• The controller is in pairing mode\n• It is not connected to Zwift at the same time');
+                document.getElementById('btn-controls').innerText = 'Connect Controls (Bluetooth)';
+            }
         }
 
         // --- TETRIS LOGIC ---
