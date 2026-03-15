@@ -84,7 +84,7 @@
 
         h1 {
             color: #fff;
-            font-size: 3rem;
+            font-size: 5rem;
             margin-top: auto;
             margin-bottom: 20px;
             text-transform: uppercase;
@@ -163,8 +163,8 @@
         .side-panel {
             display: flex;
             flex-direction: column;
-            gap: 20px;
-            width: 100px;
+            gap: 30px;
+            width: 200px;
         }
 
         canvas {
@@ -175,7 +175,7 @@
         }
 
         .mini-canvas {
-            width: 80px;
+            width: 160px;
             height: auto;
             border: 2px solid #3a7bd5;
             box-shadow: 0 0 10px rgba(58, 123, 213, 0.3);
@@ -187,8 +187,8 @@
         .info-panel {
             display: flex;
             flex-direction: column;
-            gap: 20px;
-            width: 220px;
+            gap: 30px;
+            width: 320px;
         }
 
         .panel-box {
@@ -200,21 +200,21 @@
 
         .score-box h3 {
             margin: 0;
-            font-size: 1rem;
+            font-size: 1.5rem;
             color: #a0aec0;
             text-transform: uppercase;
         }
 
         .score-box span {
             display: block;
-            font-size: 2.5rem;
+            font-size: 3.5rem;
             font-weight: bold;
             color: #00d2ff;
             text-shadow: 0 0 10px rgba(0, 210, 255, 0.5);
         }
 
         .controls-info {
-            font-size: 0.9rem;
+            font-size: 1.2rem;
             line-height: 1.6;
             color: #cbd5e0;
         }
@@ -267,8 +267,8 @@
 
         /* Inputs & Lists */
         input[type="text"] {
-            padding: 12px 20px;
-            font-size: 1.2rem;
+            padding: 15px 25px;
+            font-size: 1.8rem;
             border-radius: 25px;
             border: 2px solid #00d2ff;
             background: rgba(0,0,0,0.5);
@@ -293,11 +293,11 @@
         ol.leaderboard-list li {
             display: flex;
             justify-content: space-between;
-            padding: 15px 20px;
-            margin-bottom: 10px;
+            padding: 20px 25px;
+            margin-bottom: 12px;
             background: rgba(255,255,255,0.1);
             border-radius: 8px;
-            font-size: 1.2rem;
+            font-size: 1.8rem;
             font-weight: bold;
         }
         
@@ -399,16 +399,16 @@
             <div class="side-panel">
                 <div class="panel-box score-box">
                     <h3>Hold</h3>
-                    <canvas id="hold-canvas" width="80" height="80" class="mini-canvas"></canvas>
+                    <canvas id="hold-canvas" width="160" height="160" class="mini-canvas"></canvas>
                 </div>
             </div>
 
-            <canvas id="tetris" width="240" height="400"></canvas>
+            <canvas id="tetris" width="480" height="800"></canvas>
             
             <div class="info-panel">
                 <div class="panel-box score-box">
                     <h3>Next</h3>
-                    <canvas id="next-canvas" width="80" height="240" class="mini-canvas"></canvas>
+                    <canvas id="next-canvas" width="160" height="480" class="mini-canvas"></canvas>
                 </div>
 
                 <div class="panel-box score-box" id="power-box" style="border-color: #f953c6; box-shadow: 0 0 10px rgba(249, 83, 198, 0.3); transition: all 0.3s;">
@@ -900,9 +900,9 @@
         const nextCanvas = document.getElementById('next-canvas');
         const nextContext = nextCanvas.getContext('2d');
 
-        context.scale(20, 20);
-        holdContext.scale(20, 20);
-        nextContext.scale(20, 20);
+        context.scale(40, 40);
+        holdContext.scale(40, 40);
+        nextContext.scale(40, 40);
 
         function createMatrix(w, h) {
             const matrix = [];
@@ -1331,14 +1331,14 @@
             lastTime = time;
 
             // --- DYNAMISK HASTIGHET BASERAT PÅ WATT ---
-            // < 100 Watt: Blir straffad med MYCKET snabba block (50ms - 250ms beroende på hur lågt).
-            // >= 100 Watt: Normal hastighet, skalas upp för att bli enklare ju hårdare man trampar
+            // < 75 Watt: Blir straffad med MYCKET snabba block (50ms - 200ms beroende på hur lågt).
+            // >= 75 Watt: Normal hastighet, skalas upp för att bli enklare ju hårdare man trampar
             let dynamicDropInterval;
             const powerBox = document.getElementById('power-box');
             const powerWarning = document.getElementById('power-warning');
 
-            if (currentWatts < 100) {
-                // Straffområde - Drop speed från 50ms (0W) upp till 250ms (99W)
+            if (currentWatts < 75) {
+                // Straffområde - Drop speed från 50ms (0W) upp till ca 200ms (74W)
                 dynamicDropInterval = 50 + (currentWatts * 2);
                 
                 // Visa varning
@@ -1346,7 +1346,7 @@
                 powerWarning.style.display = 'block';
             } else {
                 // Normalområde - Skalar från >=400ms till >=2500ms
-                dynamicDropInterval = Math.min(2500, 400 + ((currentWatts - 100) * 4));
+                dynamicDropInterval = Math.min(2500, 400 + ((currentWatts - 75) * 4));
                 
                 // Dölj varning
                 powerBox.classList.remove('power-warning-active');
