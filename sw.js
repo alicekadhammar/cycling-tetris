@@ -1,4 +1,4 @@
-const CACHE_NAME = 'zwift-tetris-v1';
+const CACHE_NAME = 'cycling-tetris-v1';
 
 self.addEventListener('install', (event) => {
     event.waitUntil(

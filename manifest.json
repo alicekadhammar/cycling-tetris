@@ -1,11 +1,11 @@
 {
-  "name": "Zwift-Tetris",
-  "short_name": "Zwift-Tetris",
+  "name": "Cycling-Tetris",
+  "short_name": "Cycling-Tetris",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#0d1117",
   "theme_color": "#ff00cc",
-  "description": "Play Tetris with your Zwift Play controllers and cycling power!",
+  "description": "Play Tetris with your Cycling Play controllers and cycling power!",
   "icons": [
     {
       "src": "https://upload.wikimedia.org/wikipedia/commons/3/39/Tetris_T.svg",

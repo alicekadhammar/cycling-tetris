@@ -1,19 +1,19 @@
-# 🚴 Zwift-Tetris
+# 🚴 Cycling-Tetris
 
-**Play Tetris while you ride.** Connect your Zwift smart trainer and controllers via Bluetooth and play a fully functional Tetris game — controlled by your cycling power and Zwift Click/Play buttons.
+**Play Tetris while you ride.** Connect your Cycling smart trainer and controllers via Bluetooth and play a fully functional Tetris game — controlled by your cycling power and Cycling Click/Play buttons.
 
 <p align="center">
-  <img src="screenshot.png" alt="Zwift-Tetris Start Screen" width="700">
+  <img src="screenshot.png" alt="Cycling-Tetris Start Screen" width="700">
 </p>
 
 ---
 
 ## What Is This?
 
-Zwift-Tetris is a browser-based Tetris game designed to be played on a second screen during indoor cycling sessions. It connects directly to your cycling equipment over **Web Bluetooth**:
+Cycling-Tetris is a browser-based Tetris game designed to be played on a second screen during indoor cycling sessions. It connects directly to your cycling equipment over **Web Bluetooth**:
 
 - **Power Meter** — Your real-time wattage controls the speed of the game. Pedal harder and the blocks fall slower, giving you more time. Stop pedaling and the blocks rain down as punishment.
-- **Zwift Click / Play Controllers** — Use your handlebar-mounted Zwift buttons to move, rotate, drop, and hold pieces without taking your hands off the bars.
+- **Cycling Click / Play Controllers** — Use your handlebar-mounted Cycling buttons to move, rotate, drop, and hold pieces without taking your hands off the bars.
 
 It's a zero-install, single-file PWA that runs entirely in your browser.
 
@@ -24,7 +24,7 @@ It's a zero-install, single-file PWA that runs entirely in your browser.
 | Feature | Description |
 |---|---|
 | **🔌 BLE Power Meter** | Connects to any Bluetooth cycling power meter. Your wattage dynamically controls game speed. |
-| **🎮 Zwift Click / Play** | Full button mapping for Zwift's BLE controllers — move, rotate, hard drop, and hold pieces. |
+| **🎮 Cycling Click / Play** | Full button mapping for Cycling's BLE controllers — move, rotate, hard drop, and hold pieces. |
 | **⌨️ Keyboard Controls** | Also playable with arrow keys, Shift/C for hold, and Space/A for hard drop. |
 | **⚡ Dynamic Difficulty** | Below 75W? Blocks speed up dramatically. Above 75W? The harder you pedal, the easier it gets. |
 | **🏆 Local Leaderboard** | Saves top 10 scores to `localStorage`. Compete against yourself (or your riding buddies). |
@@ -45,9 +45,9 @@ Then open `http://localhost:8080` in **Chrome** or **Edge** (required for Web Bl
 
 ### 2. Connect Your Equipment (Optional)
 - Click **Connect Power Meter** to pair your BLE power meter.
-- Click **Connect Controls** to pair your Zwift Click v2 or Zwift Play controllers.
+- Click **Connect Controls** to pair your Cycling Click v2 or Cycling Play controllers.
 
-> **Note:** Your devices must not be simultaneously connected to the Zwift app — BLE only allows one active connection at a time.
+> **Note:** Your devices must not be simultaneously connected to the Cycling app — BLE only allows one active connection at a time.
 
 ### 3. Play!
 Hit **Play Now** and start pedaling. The game responds to your power output in real time.
@@ -65,7 +65,7 @@ Hit **Play Now** and start pedaling. The game responds to your power output in r
 | Space / A | Hard drop |
 | Shift / C | Hold piece |
 
-### Zwift Click / Play
+### Cycling Click / Play
 | Button | Action |
 |---|---|
 | Left / Right | Move |
@@ -89,7 +89,7 @@ Hit **Play Now** and start pedaling. The game responds to your power output in r
 
 - A browser that supports **Web Bluetooth** (Chrome, Edge, Opera)
 - A Bluetooth cycling power meter *(optional, for dynamic speed)*
-- Zwift Click v2 or Zwift Play controllers *(optional, for handlebar controls)*
+- Cycling Click v2 or Cycling Play controllers *(optional, for handlebar controls)*
 
 ---
 

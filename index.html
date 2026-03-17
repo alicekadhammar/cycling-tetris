@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Zwift-Tetris</title>
+    <title>Cycling-Tetris</title>
     
     <!-- PWA Meta Tags -->
     <meta name="theme-color" content="#141923">
@@ -372,7 +372,7 @@
         </g>
     </svg>
 
-    <h1>Zwift-Tetris</h1>
+    <h1>Cycling-Tetris</h1>
     
     <!-- START SCREEN -->
     <div id="start-screen" class="screen active">
@@ -399,7 +399,7 @@
     </div>
 
     <!-- GAME SCREEN -->
-    <div id="game-screen" class="screen" style="">
+    <div id="game-screen" class="screen">
         <div class="game-layout">
             
             <div class="side-panel">
@@ -414,7 +414,7 @@
                     Arrows: Move/Rotate<br>
                     Down: Drop Faster<br>
                     Shift/C: Hold Piece<br><br>
-                    <em>Zwift Click/Play:</em><br>
+                    <em>Cycling Click/Play:</em><br>
                     Arrows: Move/Rotate/Drop<br>
                     <strong>A: Hard Drop</strong><br>
                     <strong>B: Hold Piece</strong>
@@ -557,7 +557,7 @@
             if (!name) name = "Anonymous";
 
             // Load existing scores from localStorage
-            let scores = JSON.parse(localStorage.getItem('zwiftTrisScores')) || [];
+            let scores = JSON.parse(localStorage.getItem('cyclingTrisScores')) || [];
             
             // Add new score
             scores.push({ name: name, score: player.score });
@@ -569,7 +569,7 @@
             scores = scores.slice(0, 10);
             
             // Save back to localStorage
-            localStorage.setItem('zwiftTrisScores', JSON.stringify(scores));
+            localStorage.setItem('cyclingTrisScores', JSON.stringify(scores));
             
             showLeaderboard();
         }
@@ -577,7 +577,7 @@
         function showLeaderboard() {
             gameState = 'LEADERBOARD';
             const list = document.getElementById('leaderboard-list');
-            let scores = JSON.parse(localStorage.getItem('zwiftTrisScores')) || [];
+            let scores = JSON.parse(localStorage.getItem('cyclingTrisScores')) || [];
             
             if (scores.length === 0) {
                 list.innerHTML = `<li style="justify-content: center; ">No scores yet. Be the first!</li>`;
@@ -611,7 +611,7 @@
 
             } catch (error) {
                 console.error("Bluetooth error:", error);
-                alert("Could not connect to Bluetooth. (Make sure you are using Chrome/Edge and the device isn't connected to Zwift at the same time).");
+                alert("Could not connect to Bluetooth. (Make sure you are using Chrome/Edge and the device isn't connected to Cycling at the same time).");
                 document.getElementById('btn-power').innerText = "Connect Power Meter (Bluetooth)";
             }
         }
@@ -623,12 +623,12 @@
             document.getElementById('watt-display').innerText = currentWatts + " W";
         }
 
-        // --- BLUETOOTH ZWIFT CLICK / PLAY CONTROLS ---
-        const ZWIFT_SERVICE_PLAY = '00000001-19ca-4651-86e5-fa29dcdd09d1';
-        const ZWIFT_SERVICE_RIDE = '0000fc82-0000-1000-8000-00805f9b34fb';
-        const ZWIFT_CHAR_MEASUREMENT = '00000002-19ca-4651-86e5-fa29dcdd09d1';
-        const ZWIFT_CHAR_CONTROL    = '00000003-19ca-4651-86e5-fa29dcdd09d1';
-        const ZWIFT_CHAR_RESPONSE   = '00000004-19ca-4651-86e5-fa29dcdd09d1';
+        // --- BLUETOOTH CYCLING CLICK / PLAY CONTROLS ---
+        const CYCLING_SERVICE_PLAY = '00000001-19ca-4651-86e5-fa29dcdd09d1';
+        const CYCLING_SERVICE_RIDE = '0000fc82-0000-1000-8000-00805f9b34fb';
+        const CYCLING_CHAR_MEASUREMENT = '00000002-19ca-4651-86e5-fa29dcdd09d1';
+        const CYCLING_CHAR_CONTROL    = '00000003-19ca-4651-86e5-fa29dcdd09d1';
+        const CYCLING_CHAR_RESPONSE   = '00000004-19ca-4651-86e5-fa29dcdd09d1';
 
         const BUTTON_MASKS = {
             LEFT_BTN:      0x1,
@@ -700,7 +700,7 @@
 
             const msgType = data[0];
 
-            // Try protocol-buffer style button status (0x23 = Zwift Ride format)
+            // Try protocol-buffer style button status (0x23 = Cycling Ride format)
             if (msgType === 0x23 && data.length >= 6) {
                 const buttonMap = data[2] | (data[3] << 8) | (data[4] << 16) | (data[5] << 24);
                 const pressed = parseControllerButtonState(buttonMap);
@@ -791,42 +791,42 @@
                 document.getElementById('btn-controls').innerText = 'Scanning...';
 
                 // Use acceptAllDevices so the user can pick from any nearby BLE device.
-                // Both known Zwift service UUIDs are listed as optionalServices.
+                // Both known Cycling service UUIDs are listed as optionalServices.
                 const device = await navigator.bluetooth.requestDevice({
                     acceptAllDevices: true,
                     optionalServices: [
-                        ZWIFT_SERVICE_PLAY,
-                        ZWIFT_SERVICE_RIDE,
+                        CYCLING_SERVICE_PLAY,
+                        CYCLING_SERVICE_RIDE,
                         '0000180f-0000-1000-8000-00805f9b34fb', // Battery
                         '0000180a-0000-1000-8000-00805f9b34fb', // Device Info
                     ]
                 });
 
                 document.getElementById('btn-controls').innerText = 'Connecting...';
-                console.log('Zwift Click — connecting to:', device.name);
+                console.log('Cycling Click — connecting to:', device.name);
 
                 const server = await device.gatt.connect();
 
-                // Try to find the Zwift custom service (try Play/Click first, then Ride)
+                // Try to find the Cycling custom service (try Play/Click first, then Ride)
                 let service;
                 try {
-                    service = await server.getPrimaryService(ZWIFT_SERVICE_PLAY);
-                    console.log('Found Zwift Play/Click service');
+                    service = await server.getPrimaryService(CYCLING_SERVICE_PLAY);
+                    console.log('Found Cycling Play/Click service');
                 } catch (e1) {
                     try {
-                        service = await server.getPrimaryService(ZWIFT_SERVICE_RIDE);
-                        console.log('Found Zwift Ride service');
+                        service = await server.getPrimaryService(CYCLING_SERVICE_RIDE);
+                        console.log('Found Cycling Ride service');
                     } catch (e2) {
-                        throw new Error('Could not find a Zwift custom service on this device. Make sure you selected the Zwift Click controller.');
+                        throw new Error('Could not find a Cycling custom service on this device. Make sure you selected the Cycling Click controller.');
                     }
                 }
 
                 // Get characteristics
-                const measurementChar = await service.getCharacteristic(ZWIFT_CHAR_MEASUREMENT);
-                const controlChar = await service.getCharacteristic(ZWIFT_CHAR_CONTROL);
+                const measurementChar = await service.getCharacteristic(CYCLING_CHAR_MEASUREMENT);
+                const controlChar = await service.getCharacteristic(CYCLING_CHAR_CONTROL);
                 let responseChar;
                 try {
-                    responseChar = await service.getCharacteristic(ZWIFT_CHAR_RESPONSE);
+                    responseChar = await service.getCharacteristic(CYCLING_CHAR_RESPONSE);
                 } catch (e) {
                     console.log('Response characteristic not found, continuing without it.');
                 }
@@ -845,7 +845,7 @@
                     try {
                         await responseChar.startNotifications();
                         responseChar.addEventListener('characteristicvaluechanged', (event) => {
-                            console.log('Zwift Click response:', new TextDecoder().decode(event.target.value));
+                            console.log('Cycling Click response:', new TextDecoder().decode(event.target.value));
                         });
                     } catch (e) {
                         console.log('Could not subscribe to response char:', e);
@@ -854,7 +854,7 @@
 
                 // Handle disconnection
                 device.addEventListener('gattserverdisconnected', () => {
-                    console.log('Zwift Click disconnected');
+                    console.log('Cycling Click disconnected');
                     const statusEl = document.getElementById('ble-controls-status');
                     statusEl.innerText = 'Controls disconnected';
                     statusEl.classList.remove('connected');
@@ -876,8 +876,8 @@
                 document.getElementById('btn-controls').style.display = 'none';
 
             } catch (error) {
-                console.error('Zwift Click connection error:', error);
-                alert('Could not connect controls: ' + error.message + '\n\nMake sure:\n• You are using Chrome or Edge\n• The controller is in pairing mode\n• It is not connected to Zwift at the same time');
+                console.error('Cycling Click connection error:', error);
+                alert('Could not connect controls: ' + error.message + '\n\nMake sure:\n• You are using Chrome or Edge\n• The controller is in pairing mode\n• It is not connected to Cycling at the same time');
                 document.getElementById('btn-controls').innerText = 'Connect Controls (Bluetooth)';
             }
         }
